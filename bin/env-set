@@ -1,0 +1,50 @@
+#!ruby -i.bckp
+
+# https://gist.github.com/botanicus/75b070b3247f265fe61b
+#
+# Usage:
+# ./env-edit.rb delete [var] [optional file]
+# ./env-edit.rb [append|prepend|replace|remove] [var] [value] [optional file]
+# ./env-edit.rb append PATH /opt/rubies/rbx-2.2.6/bin/rbx
+
+OPERATIONS = ['add', 'delete', 'append', 'prepend', 'replace', 'remove']
+
+operation, variable = ARGV.shift(2)
+
+unless OPERATIONS.include?(operation)
+  abort "Operation #{operation} is not permitted. Options are: #{OPERATIONS.inspect}"
+end
+
+if (OPERATIONS - ['delete']).include?(operation)
+  value = ARGV.shift
+end
+
+# ARGF assumes all arguments have been deleted from ARGV.
+ARGV.push('/etc/environment') if ARGV.empty?
+
+def modify(serialised_array, value, method)
+  dirs = serialised_array.split(':')
+  dirs.send(method, value)
+  dirs.uniq.join(':')
+end
+
+ARGF.each_line do |line|
+  if match = line.match(/#{variable}=["']?'(.+)["']?/)
+    new_value = case operation
+    when 'append'  then modify(match[1], value, :push)
+    when 'prepend' then modify(match[1], value, :unshift)
+    when 'remove'     then modify(match[1], value, :delete)
+    when 'replace' then value
+    when 'delete' # return nil
+    end
+
+    puts line.sub(match[1], new_value) unless line.nil? || line.empty?
+  else
+    puts line
+  end
+end
+
+# TODO: This should check where it has already been defined.
+if operation == 'add'
+  puts "#{variable}=#{value}"
+end
